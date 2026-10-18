@@ -1,0 +1,47 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: backend-simple-app-django-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: simple_app_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    container_name: backend-simple-app-django-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=False
+      - SECRET_KEY=django-insecure-prod-key-for-simple-app-django
+      - ALLOWED_HOSTS=*
+      - DATABASE_URL=postgresql://postgres:postgrespassword@postgres:5432/simple_app_db
+      - CORS_ALLOW_ALL_ORIGINS=True
+      - ADMIN_DEFAULT_USERNAME=admin
+      - ADMIN_DEFAULT_EMAIL=admin@email.com
+      - ADMIN_DEFAULT_PASSWORD=DVbOwTVuszzkCcZ1cB9RiSIzSHaPdWZo
+      - ADMIN_DEFAULT_NAME=Admin
+      - ADMIN_DEFAULT_API_KEY=adm_19b7bb01a40ebf40789f23296ed348aed9ef161caa3634f1f0f8892151c10b4d
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+
+volumes:
+  postgres_data:
+  static_volume:
+  media_volume:
