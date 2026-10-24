@@ -107,7 +107,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS Headers
 CORS_ALLOW_ALL_ORIGINS = config('CORS_ALLOW_ALL_ORIGINS', default=True, cast=bool)
-CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='', cast=Csv())
+# A API usa JWT/API Key em headers, então cookies cross-origin não são necessários.
+# Liberar credenciais junto com "qualquer origem" permitiria que qualquer site lesse
+# respostas autenticadas pela sessão do Django Admin (ex.: /api/auth/me com a API key).
+CORS_ALLOW_CREDENTIALS = config('CORS_ALLOW_CREDENTIALS', default=False, cast=bool) and not CORS_ALLOW_ALL_ORIGINS
 
 # Django REST Framework
 REST_FRAMEWORK = {
@@ -119,6 +123,16 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_THROTTLE_CLASSES': (
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': config('THROTTLE_ANON_RATE', default='100/min'),
+        'user': config('THROTTLE_USER_RATE', default='1000/min'),
+        # Endpoints de autenticação (login, cadastro, refresh, troca de senha): proteção contra força bruta
+        'auth': config('THROTTLE_AUTH_RATE', default='20/min'),
+    },
     'DEFAULT_PAGINATION_CLASS': 'apps.common.pagination.StandardResultsSetPagination',
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'EXCEPTION_HANDLER': 'apps.common.exceptions.custom_exception_handler',
@@ -169,3 +183,16 @@ ADMIN_DEFAULT_API_KEY = config(
     'ADMIN_DEFAULT_API_KEY',
     default='adm_19b7bb01a40ebf40789f23296ed348aed9ef161caa3634f1f0f8892151c10b4d'
 )
+
+# Os valores padrão acima são públicos (estão no repositório do template). Fora do modo DEBUG,
+# exige que os segredos sejam definidos via ambiente para não subir produção com chaves conhecidas.
+if not DEBUG:
+    from django.core.exceptions import ImproperlyConfigured
+
+    _required_secrets = ('SECRET_KEY', 'JWT_PRIVATE_KEY', 'ENCRYPTION_KEY', 'ENCRYPTION_IV')
+    _missing_secrets = [name for name in _required_secrets if config(name, default=None) is None]
+
+    if _missing_secrets:
+        raise ImproperlyConfigured(
+            f"Defina as variáveis de ambiente {', '.join(_missing_secrets)} antes de rodar com DEBUG=False."
+        )

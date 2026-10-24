@@ -1,6 +1,9 @@
+from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework_simplejwt.settings import api_settings
 from apps.users.models import User, UserRole
 from apps.users.serializers import UserSerializer
 
@@ -86,6 +89,15 @@ class SignUpSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Este e-mail já está cadastrado.')
         return value
 
+    def validate(self, attrs):
+        # Aplica os AUTH_PASSWORD_VALIDATORS configurados (antes eram ignorados no cadastro)
+        candidate = User(name=attrs.get('name', ''), username=attrs.get('username', ''), email=attrs.get('email', ''))
+        try:
+            validate_password(attrs.get('password'), user=candidate)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({'password': list(exc.messages)})
+        return attrs
+
     def create(self, validated_data):
         user = User.objects.create_user(
             name=validated_data['name'],
@@ -129,6 +141,14 @@ class RefreshTokenSerializer(serializers.Serializer):
                 raise serializers.ValidationError('Usuário associado ao token não encontrado ou inativo.')
 
             new_access_token = str(token.access_token)
+
+            # ROTATE_REFRESH_TOKENS estava ativo, mas o mesmo refresh token era devolvido.
+            # Gera um novo jti/exp/iat como o TokenRefreshSerializer do simplejwt faz.
+            if api_settings.ROTATE_REFRESH_TOKENS:
+                token.set_jti()
+                token.set_exp()
+                token.set_iat()
+
             new_refresh_token = str(token)
 
             return {
@@ -180,5 +200,10 @@ class ChangePasswordSerializer(serializers.Serializer):
         user = self.context['request'].user
         if not user.check_password(current_pwd):
             raise serializers.ValidationError('A senha atual informada está incorreta.')
+
+        try:
+            validate_password(new_pwd, user=user)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({'new_password': list(exc.messages)})
 
         return {'new_password': new_pwd}

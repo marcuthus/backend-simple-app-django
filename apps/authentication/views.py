@@ -1,4 +1,5 @@
 from rest_framework import status, views, permissions
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema
 from apps.users.serializers import UserSerializer, UserDetailSerializer
@@ -14,6 +15,8 @@ class SignInView(views.APIView):
     """Autentica o usuário e retorna os tokens JWT de acesso e atualização."""
 
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
 
     @extend_schema(
         summary="Login / Autenticação de Usuário",
@@ -31,6 +34,8 @@ class SignUpView(views.APIView):
     """Permite o autocadastro de um novo usuário na plataforma."""
 
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
 
     @extend_schema(
         summary="Cadastro de Novo Usuário",
@@ -49,6 +54,8 @@ class RefreshTokenView(views.APIView):
     """Renova o token JWT de acesso utilizando um token de atualização válido."""
 
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
 
     @extend_schema(
         summary="Renovação de Token JWT",
@@ -81,6 +88,8 @@ class ChangePasswordView(views.APIView):
     """Altera a senha do usuário atualmente autenticado."""
 
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth'
 
     @extend_schema(
         summary="Alteração de Senha",
