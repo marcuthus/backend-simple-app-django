@@ -109,3 +109,51 @@ def test_root_redirect_to_docs(client):
     response = client.get('/')
     assert response.status_code == 302
     assert response.url == '/api/docs/'
+
+
+@pytest.mark.django_db
+def test_sign_up_rejects_weak_password(client):
+    response = client.post(reverse('auth-sign-up'), {
+        'name': 'Fraco',
+        'username': 'fraco',
+        'email': 'fraco@test.com',
+        'password': '123456',
+    }, format='json')
+
+    assert response.status_code == 400
+    assert not User.objects.filter(email='fraco@test.com').exists()
+
+
+@pytest.mark.django_db
+def test_refresh_token_rotates(client, standard_user):
+    sign_in = client.post(reverse('auth-sign-in'), {
+        'email': 'user@test.com',
+        'password': 'TestPassword123!'
+    }, format='json').json()
+
+    response = client.post(reverse('auth-refresh-token'), {'refreshToken': sign_in['refreshToken']}, format='json')
+
+    assert response.status_code == 200
+    assert response.json()['refreshToken'] != sign_in['refreshToken']
+
+
+@pytest.mark.django_db
+def test_user_cannot_read_another_user(client, admin_user, standard_user):
+    client.force_authenticate(user=standard_user)
+    response = client.get(reverse('user-detail', args=[admin_user.id]))
+    assert response.status_code in [403, 404]
+
+
+@pytest.mark.django_db
+def test_user_cannot_promote_itself(client, standard_user):
+    client.force_authenticate(user=standard_user)
+    response = client.patch(reverse('user-detail', args=[standard_user.id]), {'role': 'ADMIN'}, format='json')
+
+    assert response.status_code == 400
+    standard_user.refresh_from_db()
+    assert standard_user.role == UserRole.USER
+
+
+def test_cors_does_not_allow_credentials_for_any_origin(settings):
+    if settings.CORS_ALLOW_ALL_ORIGINS:
+        assert settings.CORS_ALLOW_CREDENTIALS is False
